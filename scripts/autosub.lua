@@ -1,0 +1,1 @@
+../../../../forks/mpv-scripts/mpv-autosub/autosub.lua
