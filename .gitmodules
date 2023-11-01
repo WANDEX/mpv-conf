@@ -1,3 +1,7 @@
+[submodule "submods/interSubs-alexgtd"]
+	path = submods/interSubs-alexgtd
+	url = git@github.com:WANDEX/interSubs-alexgtd.git
+	branch = just_my_conf
 [submodule "submods/mpv-scripts-wiiaboo"]
 	path = submods/mpv-scripts-wiiaboo
 	url = git@github.com:WANDEX/mpv-scripts-wiiaboo.git
@@ -7,9 +11,6 @@
 [submodule "submods/mpv-autosub"]
 	path = submods/mpv-autosub
 	url = git@github.com:WANDEX/mpv-autosub.git
-[submodule "submods/interSubs-alexgtd"]
-	path = submods/interSubs-alexgtd
-	url = git@github.com:WANDEX/interSubs-alexgtd.git
 [submodule "submods/mpv-open-kinopoisk-page"]
 	path = submods/mpv-open-kinopoisk-page
 	url = git@github.com:WANDEX/mpv-open-kinopoisk-page.git
