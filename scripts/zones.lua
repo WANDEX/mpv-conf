@@ -1,1 +1,1 @@
-../../../../forks/mpv-scripts/mpv-scripts-wiiaboo/zones.lua
+../submods/mpv-scripts-wiiaboo/zones.lua

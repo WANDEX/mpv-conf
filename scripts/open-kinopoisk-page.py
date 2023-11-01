@@ -1,1 +1,1 @@
-../../../../projects/mpv-open-kinopoisk-page/open-kinopoisk-page.py
+../submods/mpv-open-kinopoisk-page/open-kinopoisk-page.py

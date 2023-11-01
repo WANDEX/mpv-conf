@@ -1,1 +1,1 @@
-../../../../forks/mpv-scripts/mpv-scripts-wiiaboo/audio-balance.lua
+../submods/mpv-scripts-wiiaboo/audio-balance.lua

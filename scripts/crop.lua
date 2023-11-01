@@ -1,1 +1,1 @@
-../../../../forks/mpv-scripts/mpv-scripts-occivink/scripts/crop.lua
+../submods/mpv-scripts-occivink/scripts/crop.lua
