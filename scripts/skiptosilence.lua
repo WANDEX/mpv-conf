@@ -1,6 +1,7 @@
 --[[
   * skiptosilence.lua v.2020-01-25
   *
+  * MODIFIED: WANDEX
   * AUTHOR: detuur
   * License: MIT
   * link: https://github.com/detuur/mpv-scripts
@@ -34,106 +35,37 @@ mutewhileskipping = no
 ************************** END OF TEMPLATE **************************
 --]]
 
-local opts = {
-    quietness = -30,
-    duration = 0.1,
-    mutewhileskipping = false
-}
-
 local mp = require 'mp'
 local msg = require 'mp.msg'
 local options = require 'mp.options'
 
-old_speed = 1
-was_paused = false
-was_muted = false
+local opts = {
+    quietness = -30,
+    duration = 0.1,
+    mutewhileskipping = false,
+}
 
-filters_added = false
-is_skipping = true
+local state = {
+    -- old_speed = mp.get_property_native("speed"),
+    old_speed = 1,
+    was_paused = false,
+    was_muted = false,
 
-old_demux_max = 0 --demuxer-max-bytes=<bytesize>
-new_demux_max = 248000000 -- 248Mib
+    filters_added = false,
+    is_skipping = true,
+}
 
-function toggleSkip()
-    -- add filters only once & after first activation by the key press
-    if not filters_added then
-        add_filters()
-        filters_added = true
-    end
+OLD_DEMUX_MAX = 0 --demuxer-max-bytes=<bytesize>
+NEW_DEMUX_MAX = 248000000 -- 248Mib
 
-    -- increase demuxer-max-bytes if current value is too low
-    old_demux_max = mp.get_property_native("demuxer-max-bytes")
-    if old_demux_max < new_demux_max then
-        mp.set_property("demuxer-max-bytes", new_demux_max)
-    end
 
-    is_skipping = not is_skipping -- flip the bool value
-    if is_skipping then
-        curr_time_pos = mp.get_property_native("time-pos")
-        foundSilence("manual-cancel-skip", curr_time_pos)
-    else
-        doSkip()
-    end
-end
-
-function doSkip()
-    setAudioFilter(true)
-    setVideoFilter(true, mp.get_property_native("width"), mp.get_property_native("height"))
-
-    -- Triggers whenever the `silencedetect` filter emits output
-    mp.observe_property("af-metadata/skiptosilence", "string", foundSilence)
-
-    was_muted = mp.get_property_native("mute")
-    if opts.mutewhileskipping then
-        mp.set_property_bool("mute", true)
-    end
-
-    was_paused = mp.get_property_native("pause")
-    mp.set_property_bool("pause", false)
-    old_speed = mp.get_property_native("speed")
-    mp.set_property("speed", 100)
-end
-
-function foundSilence(name, value)
-    if value == "{}" or value == nil then
-        return -- For some reason these are sometimes emitted. Ignore.
-    end
-
-    timecode = tonumber(string.match(value, "%d+%.?%d+"))
-
-    -- check only if not "manual-cancel-skip"
-    if name ~= "manual-cancel-skip" then
-        time_pos = mp.get_property_native("time-pos")
-        if timecode == nil or timecode < time_pos + 1 then
-            return -- Ignore anything less than a second ahead.
-        end
-    end
-
-    mp.set_property_bool("mute", was_muted)
-    mp.set_property_bool("pause", was_paused)
-    mp.set_property("speed", old_speed)
-    mp.unobserve_property(foundSilence)
-
-    setAudioFilter(false)
-    setVideoFilter(false, 0, 0)
-
-    -- Seeking to the exact moment even though we've already
-    -- fast forwarded here allows the video decoder to skip
-    -- the missed video. This prevents massive A-V lag.
-    mp.set_property_number("time-pos", timecode)
-    -- If we don't wait at least 50ms before messaging the user, we
-    -- end up displaying an old value for time-pos.
-    mp.add_timeout(0.05, osdSkippedMessage)
-end
-
-function osdSkippedMessage()
+local function osdSkippedMessage()
     mp.osd_message("Skipped to "..mp.get_property_osd("time-pos"))
 end
 
-
 -- Adds the filters to the filtergraph in a disabled state.
 -- Filter documentation: https://ffmpeg.org/ffmpeg-filters.html
-function add_filters()
+local function add_filters()
     -- `silencedetect` is an audio filter that listens for silence
     -- and emits text output with details whenever silence is detected.
     local af_table = mp.get_property_native("af")
@@ -165,12 +97,12 @@ function add_filters()
     mp.set_property_native("vf", vf_table)
 end
 
-function setAudioFilter(state)
+local function setAudioFilter(enabled)
     local af_table = mp.get_property_native("af")
     if #af_table > 0 then
         for i = #af_table, 1, -1 do
             if af_table[i].label == "skiptosilence" then
-                af_table[i].enabled = state
+                af_table[i].enabled = enabled
                 mp.set_property_native("af", af_table)
                 return
             end
@@ -178,12 +110,12 @@ function setAudioFilter(state)
     end
 end
 
-function setVideoFilter(state, width, height)
+local function setVideoFilter(enabled, width, height)
     local vf_table = mp.get_property_native("vf")
     if #vf_table > 0 then
         for i = #vf_table, 1, -1 do
             if vf_table[i].label == "skiptosilence-blackout" then
-                vf_table[i].enabled = state
+                vf_table[i].enabled = enabled
                 vf_table[i].params = {
                     graph = "nullsink,color=c=black:s="..width.."x"..height
                 }
@@ -194,6 +126,77 @@ function setVideoFilter(state, width, height)
     end
 end
 
+local function foundSilence(name, value)
+    if value == "{}" or value == nil then
+        return -- For some reason these are sometimes emitted. Ignore.
+    end
+
+    local timecode = tonumber(string.match(value, "%d+%.?%d+"))
+
+    -- check only if not "manual-cancel-skip"
+    if name ~= "manual-cancel-skip" then
+        local time_pos = mp.get_property_native("time-pos")
+        if timecode == nil or timecode < time_pos + 1 then
+            return -- Ignore anything less than a second ahead.
+        end
+    end
+
+    mp.set_property_bool("mute",  state.was_muted)
+    mp.set_property_bool("pause", state.was_paused)
+    mp.set_property("speed", state.old_speed)
+    mp.unobserve_property(foundSilence)
+
+    setAudioFilter(false)
+    setVideoFilter(false, 0, 0)
+
+    -- Seeking to the exact moment even though we've already
+    -- fast forwarded here allows the video decoder to skip
+    -- the missed video. This prevents massive A-V lag.
+    mp.set_property_number("time-pos", timecode)
+    -- If we don't wait at least 50ms before messaging the user, we
+    -- end up displaying an old value for time-pos.
+    mp.add_timeout(0.05, osdSkippedMessage)
+end
+
+local function doSkip()
+    setAudioFilter(true)
+    setVideoFilter(true, mp.get_property_native("width"), mp.get_property_native("height"))
+
+    -- Triggers whenever the `silencedetect` filter emits output
+    mp.observe_property("af-metadata/skiptosilence", "string", foundSilence)
+
+    state.was_muted = mp.get_property_native("mute")
+    if opts.mutewhileskipping then
+        mp.set_property_bool("mute", true)
+    end
+
+    state.was_paused = mp.get_property_native("pause")
+    mp.set_property_bool("pause", false)
+    state.old_speed = mp.get_property_native("speed")
+    mp.set_property("speed", 100)
+end
+
+local function toggleSkip()
+    -- add filters only once & after first activation by the key press
+    if not state.filters_added then
+        add_filters()
+        state.filters_added = true
+    end
+
+    -- increase demuxer-max-bytes if current value is too low
+    OLD_DEMUX_MAX = mp.get_property_native("demuxer-max-bytes")
+    if OLD_DEMUX_MAX < NEW_DEMUX_MAX then
+        mp.set_property("demuxer-max-bytes", NEW_DEMUX_MAX)
+    end
+
+    state.is_skipping = not state.is_skipping -- flip the bool value
+    if state.is_skipping then
+        foundSilence("manual-cancel-skip", mp.get_property_native("time-pos"))
+    else
+        doSkip()
+    end
+end
+
 options.read_options(opts)
 
-mp.add_forced_key_binding("F3", "toggle-skip-to-silence", toggleSkip)
+mp.add_key_binding("F3", "toggle_skip_to_silence", toggleSkip)
