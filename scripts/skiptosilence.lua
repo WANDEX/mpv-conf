@@ -52,8 +52,10 @@ local state = {
     was_paused  = false,
 }
 
-OLD_DEMUX_MAX = 0 --demuxer-max-bytes=<bytesize>
-NEW_DEMUX_MAX = 248000000 -- 248Mib
+-- remember initial value of the --demuxer-max-bytes=<bytesize>
+INIT_DEMUX_MAX = mp.get_property_native("demuxer-max-bytes")
+PREF_DEMUX_MAX = 248000000 -- 248Mib (preferrable for the script to work)
+OVERRIDE_DEMUX = false
 
 --[[
 Dev note about the used filters:
@@ -76,17 +78,15 @@ local function foundSilence(name, value)
         return -- For some reason these are sometimes emitted. Ignore.
     end
 
-    --[[ XXX: this block of code currently feels useless
     local timecode = tonumber(string.match(value, "%d+%.?%d+"))
     local time_pos = mp.get_property_native("time-pos")
     if timecode == nil or timecode < time_pos + 1 then
-        -- return only if not in "manual_cancel_skip"
-        -- (otherwise it will not cancel skipping)
         if name ~= "manual_cancel_skip" then
-            return -- Ignore anything less than a second ahead.
+            return -- Ignore anything less than a second ahead. (e.g. subtle consecutive noise, then silence)
         end
+        -- but only if not in "manual_cancel_skip"
+        -- (otherwise it will not cancel the skip, will not resume normal playback)
     end
-    --]]
 
     state.is_skipping = false
     mp.set_property_bool("mute",  state.was_muted)
@@ -101,7 +101,6 @@ local function foundSilence(name, value)
     -- Seeking to the exact moment even though we've already
     -- fast forwarded here allows the video decoder to skip
     -- the missed video. This prevents massive A-V lag.
-    local timecode = tonumber(string.match(value, "%d+%.?%d+"))
     mp.set_property_number("time-pos", timecode)
     -- If we don't wait at least 50ms before messaging the user, we
     -- end up displaying an old value for time-pos.
@@ -135,13 +134,22 @@ local function doSkip()
     mp.set_property("speed", 100)
 end
 
-local function toggleSkip()
+local function set_pref_demux()
     -- increase demuxer-max-bytes if current value is too low
-    OLD_DEMUX_MAX = mp.get_property_native("demuxer-max-bytes")
-    if OLD_DEMUX_MAX < NEW_DEMUX_MAX then
-        mp.set_property("demuxer-max-bytes", NEW_DEMUX_MAX)
+    if OVERRIDE_DEMUX and INIT_DEMUX_MAX < PREF_DEMUX_MAX then
+        mp.set_property("demuxer-max-bytes", PREF_DEMUX_MAX)
     end
+end
 
+local function set_init_demux()
+    -- set back the initial demuxer value
+    if OVERRIDE_DEMUX and INIT_DEMUX_MAX < PREF_DEMUX_MAX then
+        mp.set_property("demuxer-max-bytes", INIT_DEMUX_MAX)
+    end
+end
+
+local function toggleSkip()
+    set_pref_demux()
     if state.is_skipping then
         state.is_skipping = false
         foundSilence("manual_cancel_skip", mp.get_property_native("time-pos"))
@@ -149,6 +157,7 @@ local function toggleSkip()
         state.is_skipping = true
         doSkip()
     end
+    set_init_demux()
 end
 
 options.read_options(opts)
