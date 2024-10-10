@@ -18,3 +18,7 @@
 [submodule "submods/mpv-scripts-wiiaboo"]
 	path = submods/mpv-scripts-wiiaboo
 	url = git@github.com:WANDEX/mpv-scripts-wiiaboo.git
+[submodule "submods/mpv-scripts-mfcc64"]
+	path = submods/mpv-scripts-mfcc64
+	url = git@github.com:WANDEX/mpv-scripts-mfcc64.git
+	branch = wndx
